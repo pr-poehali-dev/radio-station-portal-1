@@ -136,34 +136,43 @@ export default function Home() {
           <Icon name="LayoutGrid" size={18} className="text-primary" />
           Категории
         </h2>
-        <div className="flex gap-2 flex-wrap">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
           <button
             onClick={() => { setActiveCategory(null); loadStations(); }}
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all border ${
+            className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-xs font-semibold transition-all ${
               activeCategory === null
                 ? 'bg-primary/20 text-primary border-primary/40'
-                : 'bg-secondary/60 text-muted-foreground border-transparent hover:border-border'
+                : 'bg-secondary/50 text-muted-foreground border-transparent hover:border-border hover:text-foreground'
             }`}
           >
-            <Icon name="Layers" size={14} />
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${activeCategory === null ? 'bg-primary/20' : 'bg-secondary'}`}>
+              <Icon name="Layers" size={18} />
+            </div>
             Все
           </button>
-          {categories.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => handleCategoryClick(cat.id)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all border ${
-                activeCategory === cat.id
-                  ? 'text-white border-transparent'
-                  : 'bg-secondary/60 text-muted-foreground border-transparent hover:border-border'
-              }`}
-              style={activeCategory === cat.id ? { backgroundColor: cat.color, borderColor: cat.color } : undefined}
-            >
-              <Icon name={CAT_ICONS[cat.name] || 'Radio'} size={13}
-                style={activeCategory !== cat.id ? { color: cat.color } : undefined} />
-              {cat.name}
-            </button>
-          ))}
+          {categories.map(cat => {
+            const active = activeCategory === cat.id;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => handleCategoryClick(cat.id)}
+                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-xs font-semibold transition-all ${
+                  active
+                    ? 'text-white border-transparent'
+                    : 'bg-secondary/50 text-muted-foreground border-transparent hover:border-border hover:text-foreground'
+                }`}
+                style={active ? { backgroundColor: cat.color, borderColor: cat.color } : undefined}
+              >
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center ${active ? 'bg-white/20' : 'bg-secondary'}`}
+                  style={!active ? { color: cat.color } : undefined}
+                >
+                  <Icon name={CAT_ICONS[cat.name] || 'Radio'} size={18} />
+                </div>
+                <span className="text-center leading-tight">{cat.name}</span>
+              </button>
+            );
+          })}
         </div>
       </section>
 
