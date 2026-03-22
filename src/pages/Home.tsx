@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { radioApi } from '@/lib/api';
+import { radioApi, userApi } from '@/lib/api';
 import StationCard from '@/components/StationCard';
 import Icon from '@/components/ui/icon';
+import { useAuth } from '@/lib/store';
 import type { Station } from '@/lib/store';
 
 interface Banner {
@@ -19,78 +20,111 @@ interface Category {
   color: string;
 }
 
+const SLIDE_GRADIENTS = [
+  'from-purple-900 via-blue-900 to-cyan-900',
+  'from-pink-900 via-purple-900 to-blue-900',
+  'from-orange-900 via-red-900 to-purple-900',
+];
+
+const CAT_ICONS: Record<string, string> = {
+  'Новости': 'Newspaper',
+  'Музыка': 'Music',
+  'Разговорное': 'MessageSquare',
+  'Спорт': 'Trophy',
+  'Детское': 'Star',
+};
+
 export default function Home() {
+  const { user } = useAuth();
   const [banners, setBanners] = useState<Banner[]>([]);
-  const [popular, setPopular] = useState<Station[]>([]);
-  const [featured, setFeatured] = useState<Station[]>([]);
+  const [allStations, setAllStations] = useState<Station[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [slideIdx, setSlideIdx] = useState(0);
   const [favorites, setFavorites] = useState<number[]>([]);
+  const [slideIdx, setSlideIdx] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [activeCategory, setActiveCategory] = useState<number | null>(null);
 
   useEffect(() => {
     radioApi.getSlider().then(r => { if (r.ok) setBanners(r.data.banners || []); });
-    radioApi.getPopular(8).then(r => { if (r.ok) setPopular(r.data.stations || []); });
-    radioApi.getStations({ sort: 'listen_count', limit: '8' }).then(r => { if (r.ok) setFeatured(r.data.stations?.filter((s: Station) => s.is_featured) || []); });
     radioApi.getCategories().then(r => { if (r.ok) setCategories(r.data.categories || []); });
+    loadStations();
   }, []);
 
   useEffect(() => {
+    if (!user) return;
+    userApi.getFavorites().then(r => {
+      if (r.ok) setFavorites(r.data.favorites?.map((s: Station) => s.id) || []);
+    });
+  }, [user]);
+
+  const loadStations = async (categoryId?: number) => {
+    setLoading(true);
+    const params: Record<string, string> = { sort: 'listen_count', limit: '50' };
+    if (categoryId) params.category_id = String(categoryId);
+    const r = await radioApi.getStations(params);
+    if (r.ok) setAllStations(r.data.stations || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
     if (!banners.length) return;
-    const t = setInterval(() => setSlideIdx(i => (i + 1) % banners.length), 4000);
+    const t = setInterval(() => setSlideIdx(i => (i + 1) % banners.length), 4500);
     return () => clearInterval(t);
   }, [banners.length]);
 
-  const SLIDE_GRADIENTS = [
-    'from-purple-900/80 via-blue-900/60 to-cyan-900/40',
-    'from-pink-900/80 via-purple-900/60 to-blue-900/40',
-    'from-orange-900/80 via-red-900/60 to-purple-900/40',
-  ];
-
-  const CAT_ICONS: Record<string, string> = {
-    'Новости': 'Newspaper',
-    'Музыка': 'Music',
-    'Разговорное': 'MessageSquare',
-    'Спорт': 'Trophy',
-    'Детское': 'Star',
+  const handleCategoryClick = (catId: number) => {
+    const next = activeCategory === catId ? null : catId;
+    setActiveCategory(next);
+    loadStations(next || undefined);
   };
 
+  const toggleFav = async (station: Station) => {
+    if (!user) return;
+    if (favorites.includes(station.id)) {
+      await userApi.removeFavorite(station.id);
+      setFavorites(f => f.filter(id => id !== station.id));
+    } else {
+      await userApi.addFavorite(station.id);
+      setFavorites(f => [...f, station.id]);
+    }
+  };
+
+  const featured = allStations.filter(s => s.is_featured);
+  const rest = allStations.filter(s => !s.is_featured);
+
   return (
-    <div className="container py-6 space-y-10 animate-fade-in">
+    <div className="px-4 md:px-6 py-6 space-y-8 animate-fade-in">
 
       {/* Hero Slider */}
       {banners.length > 0 && (
-        <div className="relative rounded-2xl overflow-hidden h-48 md:h-72 neon-border">
+        <div className="relative rounded-2xl overflow-hidden h-44 md:h-64 neon-border">
           {banners.map((banner, idx) => (
             <div
               key={banner.id}
-              className={`absolute inset-0 transition-opacity duration-700 ${idx === slideIdx ? 'opacity-100' : 'opacity-0'}`}
+              className={`absolute inset-0 transition-all duration-700 ${idx === slideIdx ? 'opacity-100' : 'opacity-0'}`}
             >
               {banner.image_url ? (
                 <img src={banner.image_url} alt={banner.title} className="w-full h-full object-cover" />
               ) : (
-                <div className={`w-full h-full bg-gradient-to-r ${SLIDE_GRADIENTS[idx % SLIDE_GRADIENTS.length]}`} />
+                <div className={`w-full h-full bg-gradient-to-br ${SLIDE_GRADIENTS[idx % SLIDE_GRADIENTS.length]}`} />
               )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent flex flex-col justify-end p-6 md:p-10">
-                <h1 className="font-oswald text-2xl md:text-4xl font-bold text-white leading-tight">{banner.title}</h1>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-end p-5 md:p-8">
+                <h1 className="font-oswald text-xl md:text-3xl font-bold text-white leading-tight">{banner.title}</h1>
                 {banner.subtitle && (
-                  <p className="text-white/80 mt-1 text-sm md:text-base">{banner.subtitle}</p>
+                  <p className="text-white/75 mt-1 text-xs md:text-sm">{banner.subtitle}</p>
                 )}
-                <Link to="/stations" className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/15 backdrop-blur-sm text-white text-sm font-semibold hover:bg-white/25 transition-colors w-fit">
-                  <Icon name="Radio" size={16} />
-                  Слушать сейчас
+                <Link to="/stations" className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/15 backdrop-blur-sm text-white text-xs font-semibold hover:bg-white/25 transition-colors w-fit">
+                  <Icon name="Play" size={12} />
+                  Слушать
                 </Link>
               </div>
             </div>
           ))}
-
           {/* Dots */}
-          <div className="absolute bottom-4 right-4 flex gap-1.5">
+          <div className="absolute bottom-3 right-3 flex gap-1.5">
             {banners.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setSlideIdx(i)}
-                className={`w-2 h-2 rounded-full transition-all ${i === slideIdx ? 'bg-white w-6' : 'bg-white/40'}`}
-              />
+              <button key={i} onClick={() => setSlideIdx(i)}
+                className={`h-1.5 rounded-full transition-all ${i === slideIdx ? 'bg-white w-5' : 'bg-white/40 w-1.5'}`} />
             ))}
           </div>
         </div>
@@ -98,88 +132,127 @@ export default function Home() {
 
       {/* Categories */}
       <section>
-        <h2 className="font-oswald text-xl font-bold mb-4 flex items-center gap-2">
-          <Icon name="Grid" size={20} className="text-primary" />
+        <h2 className="font-oswald text-lg font-bold mb-3 flex items-center gap-2">
+          <Icon name="LayoutGrid" size={18} className="text-primary" />
           Категории
         </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-          {categories.map((cat, i) => (
-            <Link
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => { setActiveCategory(null); loadStations(); }}
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all border ${
+              activeCategory === null
+                ? 'bg-primary/20 text-primary border-primary/40'
+                : 'bg-secondary/60 text-muted-foreground border-transparent hover:border-border'
+            }`}
+          >
+            <Icon name="Layers" size={14} />
+            Все
+          </button>
+          {categories.map(cat => (
+            <button
               key={cat.id}
-              to={`/stations?category_id=${cat.id}`}
-              className={`group flex items-center gap-3 p-3 rounded-xl gradient-card hover:scale-105 transition-all duration-200 animate-fade-in stagger-${Math.min(i+1, 5)}`}
-              style={{ borderColor: `${cat.color}40` }}
+              onClick={() => handleCategoryClick(cat.id)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all border ${
+                activeCategory === cat.id
+                  ? 'text-white border-transparent'
+                  : 'bg-secondary/60 text-muted-foreground border-transparent hover:border-border'
+              }`}
+              style={activeCategory === cat.id ? { backgroundColor: cat.color, borderColor: cat.color } : undefined}
             >
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white flex-shrink-0"
-                   style={{ backgroundColor: `${cat.color}33`, border: `1px solid ${cat.color}60` }}>
-                <Icon name={CAT_ICONS[cat.name] || 'Radio'} size={18} style={{ color: cat.color }} />
-              </div>
-              <span className="font-semibold text-sm">{cat.name}</span>
-            </Link>
+              <Icon name={CAT_ICONS[cat.name] || 'Radio'} size={13}
+                style={activeCategory !== cat.id ? { color: cat.color } : undefined} />
+              {cat.name}
+            </button>
           ))}
         </div>
       </section>
 
-      {/* Popular */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-oswald text-xl font-bold flex items-center gap-2">
-            <Icon name="TrendingUp" size={20} className="text-primary" />
-            Популярные
-          </h2>
-          <Link to="/stations?sort=listen_count" className="text-sm text-primary hover:underline flex items-center gap-1">
-            Все <Icon name="ChevronRight" size={16} />
-          </Link>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-          {popular.map((station, i) => (
-            <div key={station.id} className={`animate-fade-in stagger-${Math.min(i+1, 5)}`}>
-              <StationCard
-                station={station}
-                isFav={favorites.includes(station.id)}
-                onFavChange={() => setFavorites(f => f.includes(station.id) ? f.filter(id => id !== station.id) : [...f, station.id])}
-              />
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Featured */}
-      {featured.length > 0 && (
+      {/* Featured stations (top row) */}
+      {featured.length > 0 && !activeCategory && (
         <section>
-          <h2 className="font-oswald text-xl font-bold mb-4 flex items-center gap-2">
-            <Icon name="Star" size={20} className="text-yellow-400" />
-            Рекомендуем
-          </h2>
-          <div className="space-y-1">
-            {featured.slice(0, 6).map(station => (
-              <StationCard key={station.id} station={station} compact isFav={favorites.includes(station.id)} />
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-oswald text-lg font-bold flex items-center gap-2">
+              <Icon name="Star" size={18} className="text-yellow-400" />
+              Рекомендуем
+            </h2>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {featured.slice(0, 5).map((station, i) => (
+              <div key={station.id} className="animate-fade-in" style={{ animationDelay: `${i * 0.05}s` }}>
+                <StationCard
+                  station={station}
+                  isFav={favorites.includes(station.id)}
+                  onFavChange={() => toggleFav(station)}
+                />
+              </div>
             ))}
           </div>
         </section>
       )}
 
-      {/* Donate CTA */}
+      {/* All Stations grid */}
       <section>
-        <Link to="/donate" className="block rounded-2xl overflow-hidden neon-border group hover:scale-[1.01] transition-all">
-          <div className="relative p-6 md:p-8 bg-gradient-to-r from-yellow-600/20 via-orange-600/20 to-red-600/20">
-            <div className="absolute inset-0 bg-gradient-to-r from-yellow-600/5 to-red-600/5" />
-            <div className="relative flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                <Icon name="Heart" size={24} className="text-white" />
-              </div>
-              <div>
-                <h3 className="font-oswald text-xl font-bold">Поддержите проект</h3>
-                <p className="text-sm text-muted-foreground mt-1">Помогите нам развивать лучший радиосервис России</p>
-              </div>
-              <div className="ml-auto hidden md:flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-semibold text-sm">
-                Поддержать <Icon name="ArrowRight" size={16} />
-              </div>
-            </div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-oswald text-lg font-bold flex items-center gap-2">
+            <Icon name="TrendingUp" size={18} className="text-primary" />
+            {activeCategory ? categories.find(c => c.id === activeCategory)?.name : 'Все станции'}
+            <span className="text-sm font-normal text-muted-foreground">
+              {allStations.length > 0 && `(${allStations.length})`}
+            </span>
+          </h2>
+          <Link to="/stations" className="text-xs text-primary hover:underline flex items-center gap-1">
+            Расширенный поиск <Icon name="ExternalLink" size={12} />
+          </Link>
+        </div>
+
+        {loading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="gradient-card rounded-2xl h-44 animate-pulse" />
+            ))}
           </div>
-        </Link>
+        ) : allStations.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {(activeCategory ? allStations : rest).map((station, i) => (
+              <div key={station.id} className="animate-fade-in" style={{ animationDelay: `${i * 0.03}s` }}>
+                <StationCard
+                  station={station}
+                  isFav={favorites.includes(station.id)}
+                  onFavChange={() => toggleFav(station)}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-16">
+            <Icon name="Radio" size={44} className="text-muted-foreground mx-auto mb-3 opacity-30" />
+            <p className="text-muted-foreground text-sm">Станции не найдены</p>
+          </div>
+        )}
       </section>
 
+      {/* Donate CTA */}
+      <Link to="/donate" className="block rounded-2xl overflow-hidden neon-border group hover:scale-[1.01] transition-all">
+        <div className="p-5 bg-gradient-to-r from-yellow-600/15 via-orange-600/10 to-red-600/10">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+              <Icon name="Heart" size={22} className="text-white" />
+            </div>
+            <div>
+              <h3 className="font-oswald text-lg font-bold">Поддержите проект</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Помогите нам развивать лучший радиосервис России</p>
+            </div>
+            <div className="ml-auto hidden md:flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-semibold text-sm">
+              Поддержать <Icon name="ArrowRight" size={14} />
+            </div>
+          </div>
+        </div>
+      </Link>
+
+      {/* Copyright */}
+      <footer className="text-center text-xs text-muted-foreground pb-2">
+        © 2026 РАДИО РФ — Все радиостанции России онлайн
+      </footer>
     </div>
   );
 }

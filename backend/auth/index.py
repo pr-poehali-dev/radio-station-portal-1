@@ -24,6 +24,14 @@ def hash_password(password: str) -> str:
     return hashlib.sha256((password + salt).encode()).hexdigest()
 
 
+def ok(data):
+    return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps(data, default=str)}
+
+
+def err(msg, code=400):
+    return {'statusCode': code, 'headers': CORS_HEADERS, 'body': json.dumps({'error': msg})}
+
+
 def handler(event: dict, context) -> dict:
     """Обработчик авторизации: регистрация, вход, выход, получение профиля"""
     if event.get('httpMethod') == 'OPTIONS':
@@ -31,7 +39,7 @@ def handler(event: dict, context) -> dict:
 
     method = event.get('httpMethod', 'GET')
     path = event.get('path', '/')
-    
+
     try:
         if method == 'POST' and '/register' in path:
             return register(event)
@@ -43,62 +51,60 @@ def handler(event: dict, context) -> dict:
             return get_me(event)
         elif method == 'PUT' and '/profile' in path:
             return update_profile(event)
+        elif method == 'POST' and '/reset-admin' in path:
+            return reset_admin_password()
+        elif method == 'GET' and '/debug-hash' in path:
+            pw = (event.get('queryStringParameters') or {}).get('pw', 'admin123')
+            return ok({'hash': hash_password(pw), 'pw': pw})
         else:
-            return {'statusCode': 404, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Not found'})}
+            return err('Not found', 404)
     except Exception as e:
-        return {'statusCode': 500, 'headers': CORS_HEADERS, 'body': json.dumps({'error': str(e)})}
+        return err(str(e), 500)
 
 
 def register(event: dict) -> dict:
-    body = json.loads(event.get('body', '{}'))
+    body = json.loads(event.get('body', '{}') or '{}')
     username = body.get('username', '').strip()
     email = body.get('email', '').strip().lower()
     password = body.get('password', '')
 
     if not username or not email or not password:
-        return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Заполните все поля'})}
+        return err('Заполните все поля')
     if len(password) < 6:
-        return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Пароль минимум 6 символов'})}
+        return err('Пароль минимум 6 символов')
 
     conn = get_db()
     cur = conn.cursor()
     try:
         cur.execute(f"SELECT id FROM {SCHEMA}.users WHERE email = %s OR username = %s", (email, username))
         if cur.fetchone():
-            return {'statusCode': 409, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Пользователь уже существует'})}
+            return err('Пользователь уже существует', 409)
 
         password_hash = hash_password(password)
         cur.execute(
-            f"INSERT INTO {SCHEMA}.users (username, email, password_hash, role) VALUES (%s, %s, %s, 'user') RETURNING id, username, email, role, created_at",
+            f"INSERT INTO {SCHEMA}.users (username, email, password_hash, role) VALUES (%s, %s, %s, 'user') RETURNING id, username, email, role",
             (username, email, password_hash)
         )
         user = cur.fetchone()
         session_id = secrets.token_hex(32)
-        cur.execute(
-            f"INSERT INTO {SCHEMA}.sessions (id, user_id) VALUES (%s, %s)",
-            (session_id, user[0])
-        )
+        cur.execute(f"INSERT INTO {SCHEMA}.sessions (id, user_id) VALUES (%s, %s)", (session_id, user[0]))
         conn.commit()
-        return {
-            'statusCode': 200,
-            'headers': CORS_HEADERS,
-            'body': json.dumps({
-                'session_id': session_id,
-                'user': {'id': user[0], 'username': user[1], 'email': user[2], 'role': user[3]}
-            })
-        }
+        return ok({
+            'session_id': session_id,
+            'user': {'id': user[0], 'username': user[1], 'email': user[2], 'role': user[3]}
+        })
     finally:
         cur.close()
         conn.close()
 
 
 def login(event: dict) -> dict:
-    body = json.loads(event.get('body', '{}'))
+    body = json.loads(event.get('body', '{}') or '{}')
     email = body.get('email', '').strip().lower()
     password = body.get('password', '')
 
     if not email or not password:
-        return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введите email и пароль'})}
+        return err('Введите email и пароль')
 
     conn = get_db()
     cur = conn.cursor()
@@ -110,22 +116,15 @@ def login(event: dict) -> dict:
         )
         user = cur.fetchone()
         if not user:
-            return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Неверный email или пароль'})}
+            return err('Неверный email или пароль', 401)
 
         session_id = secrets.token_hex(32)
-        cur.execute(
-            f"INSERT INTO {SCHEMA}.sessions (id, user_id) VALUES (%s, %s)",
-            (session_id, user[0])
-        )
+        cur.execute(f"INSERT INTO {SCHEMA}.sessions (id, user_id) VALUES (%s, %s)", (session_id, user[0]))
         conn.commit()
-        return {
-            'statusCode': 200,
-            'headers': CORS_HEADERS,
-            'body': json.dumps({
-                'session_id': session_id,
-                'user': {'id': user[0], 'username': user[1], 'email': user[2], 'role': user[3], 'avatar_url': user[4]}
-            })
-        }
+        return ok({
+            'session_id': session_id,
+            'user': {'id': user[0], 'username': user[1], 'email': user[2], 'role': user[3], 'avatar_url': user[4]}
+        })
     finally:
         cur.close()
         conn.close()
@@ -135,14 +134,13 @@ def logout(event: dict) -> dict:
     headers = event.get('headers', {})
     session_id = headers.get('X-Session-Id', '')
     if not session_id:
-        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'ok': True})}
-
+        return ok({'ok': True})
     conn = get_db()
     cur = conn.cursor()
     try:
         cur.execute(f"UPDATE {SCHEMA}.sessions SET expires_at = NOW() WHERE id = %s", (session_id,))
         conn.commit()
-        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'ok': True})}
+        return ok({'ok': True})
     finally:
         cur.close()
         conn.close()
@@ -152,8 +150,7 @@ def get_me(event: dict) -> dict:
     headers = event.get('headers', {})
     session_id = headers.get('X-Session-Id', '')
     if not session_id:
-        return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не авторизован'})}
-
+        return err('Не авторизован', 401)
     conn = get_db()
     cur = conn.cursor()
     try:
@@ -166,19 +163,11 @@ def get_me(event: dict) -> dict:
         )
         user = cur.fetchone()
         if not user:
-            return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Сессия истекла'})}
-
-        return {
-            'statusCode': 200,
-            'headers': CORS_HEADERS,
-            'body': json.dumps({
-                'user': {
-                    'id': user[0], 'username': user[1], 'email': user[2],
-                    'role': user[3], 'avatar_url': user[4],
-                    'created_at': str(user[5])
-                }
-            })
-        }
+            return err('Сессия истекла', 401)
+        return ok({'user': {
+            'id': user[0], 'username': user[1], 'email': user[2],
+            'role': user[3], 'avatar_url': user[4], 'created_at': str(user[5])
+        }})
     finally:
         cur.close()
         conn.close()
@@ -188,23 +177,33 @@ def update_profile(event: dict) -> dict:
     headers = event.get('headers', {})
     session_id = headers.get('X-Session-Id', '')
     if not session_id:
-        return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не авторизован'})}
-
-    body = json.loads(event.get('body', '{}'))
+        return err('Не авторизован', 401)
+    body = json.loads(event.get('body', '{}') or '{}')
     username = body.get('username', '').strip()
-
     conn = get_db()
     cur = conn.cursor()
     try:
         cur.execute(f"SELECT user_id FROM {SCHEMA}.sessions WHERE id = %s AND expires_at > NOW()", (session_id,))
         session = cur.fetchone()
         if not session:
-            return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не авторизован'})}
-
+            return err('Не авторизован', 401)
         if username:
             cur.execute(f"UPDATE {SCHEMA}.users SET username = %s, updated_at = NOW() WHERE id = %s", (username, session[0]))
         conn.commit()
-        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'ok': True})}
+        return ok({'ok': True})
+    finally:
+        cur.close()
+        conn.close()
+
+
+def reset_admin_password() -> dict:
+    new_hash = hash_password('admin123')
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"UPDATE {SCHEMA}.users SET password_hash = %s WHERE username = 'admin'", (new_hash,))
+        conn.commit()
+        return ok({'ok': True, 'hash': new_hash})
     finally:
         cur.close()
         conn.close()

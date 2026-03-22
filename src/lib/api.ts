@@ -10,16 +10,27 @@ function getSession() {
 }
 
 async function request(fn: string, path: string, method = 'GET', body?: unknown) {
-  const res = await fetch(`${URLS[fn]}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
+  try {
+    const headers: Record<string, string> = {
       'X-Session-Id': getSession(),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json();
-  return { ok: res.ok, status: res.status, data };
+    };
+    if (body) headers['Content-Type'] = 'application/json';
+
+    const res = await fetch(`${URLS[fn]}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    try {
+      const data = await res.json();
+      return { ok: res.ok, status: res.status, data };
+    } catch {
+      return { ok: res.ok, status: res.status, data: {} };
+    }
+  } catch (e) {
+    console.error('API error', fn, path, e);
+    return { ok: false, status: 0, data: { error: 'Нет соединения с сервером' } };
+  }
 }
 
 export const authApi = {

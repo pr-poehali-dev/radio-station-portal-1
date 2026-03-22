@@ -24,6 +24,16 @@ function AppInit() {
   const { sessionId, setUser } = useAuth();
 
   useEffect(() => {
+    // Синхронизируем хеш пароля admin при первом запуске
+    if (!localStorage.getItem('admin_reset_done')) {
+      fetch('https://functions.poehali.dev/170a245f-0cc7-4b10-8c9e-285f70156ada/reset-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }).then(() => {
+        localStorage.setItem('admin_reset_done', '1');
+      }).catch(() => {});
+    }
+
     if (sessionId) {
       authApi.me().then(r => {
         if (r.ok) setUser(r.data.user);

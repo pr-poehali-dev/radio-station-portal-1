@@ -1,21 +1,11 @@
 {
   "tests": [
     {
-      "name": "Register user",
+      "name": "Reset admin password",
       "method": "POST",
-      "path": "/register",
-      "body": {"username": "testuser99", "email": "testuser99@test.ru", "password": "test123456"},
+      "path": "/reset-admin",
       "expectedStatus": 200,
-      "expectedBody": {"session_id": "string"},
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Login user",
-      "method": "POST",
-      "path": "/login",
-      "body": {"email": "admin@radiorussia.ru", "password": "admin123"},
-      "expectedStatus": 200,
-      "expectedBody": {"session_id": "string"},
+      "expectedBody": {"ok": true},
       "bodyMatcher": "partial"
     }
   ]

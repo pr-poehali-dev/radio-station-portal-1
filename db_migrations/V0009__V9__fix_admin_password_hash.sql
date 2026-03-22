@@ -1,0 +1,1 @@
+UPDATE t_p56117371_radio_station_portal.users SET password_hash = 'f3abc5bd31d5f5e4d8294fc5e4bca89a15cd3e6ef5b82e6f06a6dae4e3f28c1a' WHERE username = 'admin';
