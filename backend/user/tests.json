@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "name": "Get history unauthorized",
+      "method": "GET",
+      "path": "/history",
+      "expectedStatus": 401,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get favorites unauthorized",
+      "method": "GET",
+      "path": "/favorites",
+      "expectedStatus": 401,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

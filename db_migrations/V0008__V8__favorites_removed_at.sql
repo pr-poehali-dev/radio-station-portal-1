@@ -1,0 +1,1 @@
+ALTER TABLE t_p56117371_radio_station_portal.favorites ADD COLUMN IF NOT EXISTS removed_at TIMESTAMP;

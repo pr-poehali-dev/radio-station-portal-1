@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "name": "Analytics unauthorized",
+      "method": "GET",
+      "path": "/analytics",
+      "expectedStatus": 403,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Stations list unauthorized",
+      "method": "GET",
+      "path": "/stations",
+      "expectedStatus": 403,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

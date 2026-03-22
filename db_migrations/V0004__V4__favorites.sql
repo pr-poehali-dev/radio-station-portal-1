@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS t_p56117371_radio_station_portal.favorites (id SERIAL PRIMARY KEY, user_id INTEGER, station_id INTEGER, created_at TIMESTAMP DEFAULT NOW(), UNIQUE(user_id, station_id));

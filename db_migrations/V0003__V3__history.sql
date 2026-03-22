@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS t_p56117371_radio_station_portal.listen_history (id SERIAL PRIMARY KEY, user_id INTEGER, station_id INTEGER, listened_at TIMESTAMP DEFAULT NOW(), duration_seconds INTEGER DEFAULT 0);

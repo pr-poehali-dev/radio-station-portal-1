@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS t_p56117371_radio_station_portal.categories (id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE, slug VARCHAR(100) NOT NULL UNIQUE, color VARCHAR(20) DEFAULT '#8b5cf6', created_at TIMESTAMP DEFAULT NOW());
+
+CREATE TABLE IF NOT EXISTS t_p56117371_radio_station_portal.genres (id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE, slug VARCHAR(100) NOT NULL UNIQUE, created_at TIMESTAMP DEFAULT NOW());
+
+CREATE TABLE IF NOT EXISTS t_p56117371_radio_station_portal.radio_stations (id SERIAL PRIMARY KEY, name VARCHAR(200) NOT NULL, description TEXT, stream_url TEXT NOT NULL, cover_url TEXT, website_url TEXT, city VARCHAR(100), frequency VARCHAR(20), category_id INTEGER REFERENCES t_p56117371_radio_station_portal.categories(id), genre_id INTEGER REFERENCES t_p56117371_radio_station_portal.genres(id), is_active BOOLEAN DEFAULT TRUE, is_featured BOOLEAN DEFAULT FALSE, listen_count BIGINT DEFAULT 0, created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW());

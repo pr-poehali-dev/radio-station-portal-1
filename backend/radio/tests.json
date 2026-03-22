@@ -1,0 +1,44 @@
+{
+  "tests": [
+    {
+      "name": "Get stations list",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {"stations": []},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get categories",
+      "method": "GET",
+      "path": "/categories",
+      "expectedStatus": 200,
+      "expectedBody": {"categories": []},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get genres",
+      "method": "GET",
+      "path": "/genres",
+      "expectedStatus": 200,
+      "expectedBody": {"genres": []},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get popular stations",
+      "method": "GET",
+      "path": "/popular",
+      "expectedStatus": 200,
+      "expectedBody": {"stations": []},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get slider banners",
+      "method": "GET",
+      "path": "/slider",
+      "expectedStatus": 200,
+      "expectedBody": {"banners": []},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

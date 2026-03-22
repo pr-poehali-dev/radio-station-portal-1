@@ -1,0 +1,3 @@
+CREATE TABLE IF NOT EXISTS t_p56117371_radio_station_portal.slider_banners (id SERIAL PRIMARY KEY, title VARCHAR(200) NOT NULL, subtitle TEXT, image_url TEXT, link_url TEXT, is_active BOOLEAN DEFAULT TRUE, sort_order INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT NOW());
+
+CREATE TABLE IF NOT EXISTS t_p56117371_radio_station_portal.sessions (id VARCHAR(128) PRIMARY KEY, user_id INTEGER, created_at TIMESTAMP DEFAULT NOW(), expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '30 days');
