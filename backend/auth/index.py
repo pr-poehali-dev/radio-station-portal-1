@@ -107,12 +107,14 @@ def login(event: dict) -> dict:
     try:
         password_hash = hash_password(password)
         cur.execute(
-            f"SELECT id, username, email, role, avatar_url FROM {SCHEMA}.users WHERE email = %s AND password_hash = %s",
+            f"SELECT id, username, email, role, avatar_url, is_blocked FROM {SCHEMA}.users WHERE email = %s AND password_hash = %s",
             (email, password_hash)
         )
         user = cur.fetchone()
         if not user:
             return err('Неверный email или пароль', 401)
+        if user[5]:
+            return err('Ваш аккаунт заблокирован', 403)
 
         session_id = secrets.token_hex(32)
         cur.execute(f"INSERT INTO {SCHEMA}.sessions (id, user_id) VALUES (%s, %s)", (session_id, user[0]))

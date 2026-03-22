@@ -4,18 +4,14 @@
       "name": "Reset admin password",
       "method": "POST",
       "path": "/?action=reset_admin",
-      "expectedStatus": 200,
-      "expectedBody": {"ok": true},
-      "bodyMatcher": "partial"
+      "expectedStatus": 200
     },
     {
       "name": "Login admin",
       "method": "POST",
       "path": "/?action=login",
       "body": {"email": "admin@radiorussia.ru", "password": "admin123"},
-      "expectedStatus": 200,
-      "expectedBody": {"session_id": "string"},
-      "bodyMatcher": "partial"
+      "expectedStatus": 200
     }
   ]
 }

@@ -76,6 +76,10 @@ def handler(event: dict, context) -> dict:
             return deactivate_station(params.get('id', ''))
         elif action == 'users':
             return get_users(event)
+        elif action == 'block_user' and method == 'POST':
+            return block_user(event, params.get('id', ''))
+        elif action == 'delete_user' and method == 'POST':
+            return delete_user(params.get('id', ''))
         elif action == 'banners' and method == 'GET':
             return get_banners()
         elif action == 'create_banner' and method == 'POST':
@@ -246,15 +250,67 @@ def get_users(event: dict) -> dict:
     params = event.get('queryStringParameters') or {}
     limit = min(int(params.get('limit', 50)), 100)
     offset = int(params.get('offset', 0))
+    search = params.get('search', '')
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute(f"SELECT id, username, email, role, avatar_url, created_at FROM {SCHEMA}.users ORDER BY created_at DESC LIMIT %s OFFSET %s", (limit, offset))
+        where = []
+        args = []
+        if search:
+            where.append("(username ILIKE %s OR email ILIKE %s)")
+            args.extend([f'%{search}%', f'%{search}%'])
+        where_str = 'WHERE ' + ' AND '.join(where) if where else ''
+        cur.execute(f"SELECT id, username, email, role, avatar_url, created_at, is_blocked FROM {SCHEMA}.users {where_str} ORDER BY created_at DESC LIMIT %s OFFSET %s", args + [limit, offset])
         rows = cur.fetchall()
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users")
+        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users {where_str}", args)
         total = cur.fetchone()[0]
-        users = [{'id': r[0], 'username': r[1], 'email': r[2], 'role': r[3], 'avatar_url': r[4], 'created_at': str(r[5])} for r in rows]
+        users = [{'id': r[0], 'username': r[1], 'email': r[2], 'role': r[3], 'avatar_url': r[4], 'created_at': str(r[5]), 'is_blocked': r[6]} for r in rows]
         return ok({'users': users, 'total': total})
+    finally:
+        cur.close()
+        conn.close()
+
+
+def block_user(event: dict, user_id: str) -> dict:
+    if not user_id:
+        return err('ID пользователя обязателен')
+    body = json.loads(event.get('body', '{}'))
+    is_blocked = body.get('is_blocked', True)
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT role FROM {SCHEMA}.users WHERE id = %s", (user_id,))
+        row = cur.fetchone()
+        if not row:
+            return err('Пользователь не найден', 404)
+        if row[0] == 'admin':
+            return err('Нельзя заблокировать администратора', 403)
+        cur.execute(f"UPDATE {SCHEMA}.users SET is_blocked = %s, updated_at = NOW() WHERE id = %s", (is_blocked, user_id))
+        conn.commit()
+        return ok({'ok': True, 'is_blocked': is_blocked})
+    finally:
+        cur.close()
+        conn.close()
+
+
+def delete_user(user_id: str) -> dict:
+    if not user_id:
+        return err('ID пользователя обязателен')
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT role FROM {SCHEMA}.users WHERE id = %s", (user_id,))
+        row = cur.fetchone()
+        if not row:
+            return err('Пользователь не найден', 404)
+        if row[0] == 'admin':
+            return err('Нельзя удалить администратора', 403)
+        cur.execute(f"DELETE FROM {SCHEMA}.sessions WHERE user_id = %s", (user_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.listen_history WHERE user_id = %s", (user_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.favorites WHERE user_id = %s", (user_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.users WHERE id = %s", (user_id,))
+        conn.commit()
+        return ok({'ok': True})
     finally:
         cur.close()
         conn.close()

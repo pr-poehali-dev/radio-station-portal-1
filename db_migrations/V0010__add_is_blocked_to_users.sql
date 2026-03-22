@@ -1,0 +1,1 @@
+ALTER TABLE t_p56117371_radio_station_portal.users ADD COLUMN IF NOT EXISTS is_blocked boolean NOT NULL DEFAULT false;

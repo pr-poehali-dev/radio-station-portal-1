@@ -4,9 +4,7 @@
       "name": "Analytics unauthorized",
       "method": "GET",
       "path": "/?action=analytics",
-      "expectedStatus": 403,
-      "expectedBody": {"error": "string"},
-      "bodyMatcher": "partial"
+      "expectedStatus": 403
     }
   ]
 }

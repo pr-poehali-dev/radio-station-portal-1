@@ -38,7 +38,8 @@ export default function Admin() {
   const [tab, setTab] = useState<Tab>('analytics');
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [stations, setStations] = useState<Station[]>([]);
-  const [users, setUsers] = useState<{ id: number; username: string; email: string; role: string; created_at: string }[]>([]);
+  const [users, setUsers] = useState<{ id: number; username: string; email: string; role: string; created_at: string; is_blocked: boolean }[]>([]);
+  const [searchUsers, setSearchUsers] = useState('');
   const [banners, setBanners] = useState<{ id: number; title: string; subtitle?: string; image_url?: string; is_active: boolean; sort_order: number }[]>([]);
   const [categories, setCategories] = useState<{ id: number; name: string; slug: string; color: string }[]>([]);
   const [genres, setGenres] = useState<{ id: number; name: string }[]>([]);
@@ -73,7 +74,7 @@ export default function Admin() {
       if (cr.ok) setCategories(cr.data.categories || []);
       if (gr.ok) setGenres(gr.data.genres || []);
     } else if (t === 'users') {
-      const r = await adminApi.getUsers();
+      const r = await adminApi.getUsers({ search: searchUsers });
       if (r.ok) setUsers(r.data.users || []);
     } else if (t === 'banners') {
       const r = await adminApi.getBanners();
@@ -147,6 +148,19 @@ export default function Admin() {
   const toggleBanner = async (id: number, is_active: boolean) => {
     await adminApi.updateBanner(id, { is_active: !is_active });
     loadTab('banners');
+  };
+
+  const toggleBlockUser = async (id: number, is_blocked: boolean) => {
+    await adminApi.blockUser(id, !is_blocked);
+    const r = await adminApi.getUsers({ search: searchUsers });
+    if (r.ok) setUsers(r.data.users || []);
+  };
+
+  const handleDeleteUser = async (id: number, username: string) => {
+    if (!confirm(`Удалить пользователя "${username}"? Это действие необратимо.`)) return;
+    await adminApi.deleteUser(id);
+    const r = await adminApi.getUsers({ search: searchUsers });
+    if (r.ok) setUsers(r.data.users || []);
   };
 
   const tabs: { key: Tab; icon: string; label: string }[] = [
@@ -467,26 +481,73 @@ export default function Admin() {
 
       {/* Users */}
       {!loading && tab === 'users' && (
-        <div className="space-y-1">
-          {users.map(u => (
-            <div key={u.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/60 transition-all">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
-                {u.username[0].toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold">{u.username}</p>
-                <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-              </div>
-              <div className="text-right">
-                {u.role === 'admin' ? (
-                  <span className="text-xs text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">admin</span>
-                ) : (
-                  <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">user</span>
-                )}
-                <p className="text-xs text-muted-foreground mt-0.5">{new Date(u.created_at).toLocaleDateString('ru-RU')}</p>
-              </div>
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1 max-w-sm">
+              <Icon name="Search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={searchUsers}
+                onChange={e => setSearchUsers(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && loadTab('users')}
+                placeholder="Поиск по имени или email..."
+                className="w-full pl-9 pr-3 py-2 rounded-xl bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
             </div>
-          ))}
+            <button
+              onClick={() => loadTab('users')}
+              className="px-4 py-2 rounded-xl bg-secondary text-sm font-semibold hover:bg-secondary/80 transition-all"
+            >
+              Найти
+            </button>
+            <span className="text-xs text-muted-foreground ml-auto">{users.length} пользователей</span>
+          </div>
+
+          <div className="space-y-2">
+            {users.map(u => (
+              <div key={u.id} className={`flex items-center gap-3 p-3 rounded-xl transition-all border ${u.is_blocked ? 'border-red-500/20 bg-red-500/5' : 'border-transparent hover:bg-secondary/60'}`}>
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold text-white flex-shrink-0 ${u.is_blocked ? 'bg-red-500/40' : 'bg-gradient-to-br from-purple-500 to-cyan-500'}`}>
+                  {u.is_blocked ? <Icon name="Lock" size={14} /> : u.username[0].toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold">{u.username}</p>
+                    {u.role === 'admin' && (
+                      <span className="text-xs text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded-full">admin</span>
+                    )}
+                    {u.is_blocked && (
+                      <span className="text-xs text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded-full">заблокирован</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                </div>
+                <p className="text-xs text-muted-foreground hidden sm:block">{new Date(u.created_at).toLocaleDateString('ru-RU')}</p>
+                {u.role !== 'admin' && (
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => toggleBlockUser(u.id, u.is_blocked)}
+                      title={u.is_blocked ? 'Разблокировать' : 'Заблокировать'}
+                      className={`p-2 rounded-lg text-xs font-semibold transition-all ${u.is_blocked ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25' : 'bg-orange-500/15 text-orange-400 hover:bg-orange-500/25'}`}
+                    >
+                      <Icon name={u.is_blocked ? 'Unlock' : 'Lock'} size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteUser(u.id, u.username)}
+                      title="Удалить"
+                      className="p-2 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-all"
+                    >
+                      <Icon name="Trash2" size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+            {users.length === 0 && (
+              <div className="text-center py-12 text-muted-foreground text-sm">
+                <Icon name="Users" size={32} className="mx-auto mb-3 opacity-30" />
+                Пользователи не найдены
+              </div>
+            )}
+          </div>
         </div>
       )}
 

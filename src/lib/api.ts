@@ -90,7 +90,11 @@ export const adminApi = {
     call('admin', 'update_station', 'POST', body, { id: String(id) }),
   deleteStation: (id: number) =>
     call('admin', 'delete_station', 'POST', undefined, { id: String(id) }),
-  getUsers: () => call('admin', 'users'),
+  getUsers: (params?: Record<string, string>) => call('admin', 'users', 'GET', undefined, params),
+  blockUser: (id: number, is_blocked: boolean) =>
+    call('admin', 'block_user', 'POST', { is_blocked }, { id: String(id) }),
+  deleteUser: (id: number) =>
+    call('admin', 'delete_user', 'POST', undefined, { id: String(id) }),
   getBanners: () => call('admin', 'banners'),
   createBanner: (body: unknown) => call('admin', 'create_banner', 'POST', body),
   updateBanner: (id: number, body: unknown) =>
