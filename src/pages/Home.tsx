@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { radioApi, userApi } from '@/lib/api';
 import StationCard from '@/components/StationCard';
 import Icon from '@/components/ui/icon';
@@ -36,6 +36,7 @@ const CAT_ICONS: Record<string, string> = {
 
 export default function Home() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [banners, setBanners] = useState<Banner[]>([]);
   const [allStations, setAllStations] = useState<Station[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -43,6 +44,8 @@ export default function Home() {
   const [slideIdx, setSlideIdx] = useState(0);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
+  const [searchInput, setSearchInput] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'row'>('grid');
 
   useEffect(() => {
     radioApi.getSlider().then(r => { if (r.ok) setBanners(r.data.banners || []); });
@@ -92,8 +95,33 @@ export default function Home() {
   const featured = allStations.filter(s => s.is_featured);
   const rest = allStations.filter(s => !s.is_featured);
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchInput.trim()) navigate(`/stations?search=${encodeURIComponent(searchInput.trim())}`);
+  };
+
+  const gridClass = viewMode === 'grid'
+    ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3'
+    : 'flex flex-col gap-2';
+
   return (
-    <div className="px-4 md:px-6 py-6 space-y-8 animate-fade-in">
+    <div className="px-4 md:px-6 py-5 space-y-6 animate-fade-in">
+
+      {/* Search bar above slider */}
+      <form onSubmit={handleSearch} className="relative">
+        <Icon name="Search" size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <input
+          type="text"
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
+          placeholder="Поиск по станции, городу, частоте..."
+          className="w-full pl-11 pr-28 py-3 rounded-xl bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-all"
+        />
+        <button type="submit"
+          className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity">
+          Найти
+        </button>
+      </form>
 
       {/* Hero Slider */}
       {banners.length > 0 && (
@@ -179,20 +207,13 @@ export default function Home() {
       {/* Featured stations (top row) */}
       {featured.length > 0 && !activeCategory && (
         <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-oswald text-lg font-bold flex items-center gap-2">
-              <Icon name="Star" size={18} className="text-yellow-400" />
-              Рекомендуем
-            </h2>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          <h2 className="font-oswald text-lg font-bold flex items-center gap-2 mb-3">
+            <Icon name="Star" size={18} className="text-yellow-400" />Рекомендуем
+          </h2>
+          <div className={gridClass}>
             {featured.slice(0, 5).map((station, i) => (
               <div key={station.id} className="animate-fade-in" style={{ animationDelay: `${i * 0.05}s` }}>
-                <StationCard
-                  station={station}
-                  isFav={favorites.includes(station.id)}
-                  onFavChange={() => toggleFav(station)}
-                />
+                <StationCard station={station} isFav={favorites.includes(station.id)} onFavChange={() => toggleFav(station)} view={viewMode} />
               </div>
             ))}
           </div>
@@ -205,30 +226,37 @@ export default function Home() {
           <h2 className="font-oswald text-lg font-bold flex items-center gap-2">
             <Icon name="TrendingUp" size={18} className="text-primary" />
             {activeCategory ? categories.find(c => c.id === activeCategory)?.name : 'Все станции'}
-            <span className="text-sm font-normal text-muted-foreground">
-              {allStations.length > 0 && `(${allStations.length})`}
-            </span>
+            {allStations.length > 0 && <span className="text-sm font-normal text-muted-foreground">({allStations.length})</span>}
           </h2>
-          <Link to="/stations" className="text-xs text-primary hover:underline flex items-center gap-1">
-            Расширенный поиск <Icon name="ExternalLink" size={12} />
-          </Link>
+          <div className="flex items-center gap-2">
+            {/* View toggle */}
+            <div className="flex items-center bg-secondary rounded-xl p-1">
+              <button onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+                <Icon name="LayoutGrid" size={15} />
+              </button>
+              <button onClick={() => setViewMode('row')}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'row' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+                <Icon name="List" size={15} />
+              </button>
+            </div>
+            <Link to="/stations" className="text-xs text-primary hover:underline flex items-center gap-1">
+              Все <Icon name="ChevronRight" size={12} />
+            </Link>
+          </div>
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          <div className={gridClass}>
             {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="gradient-card rounded-2xl h-44 animate-pulse" />
+              <div key={i} className={`gradient-card animate-pulse ${viewMode === 'grid' ? 'rounded-2xl h-44' : 'rounded-xl h-16'}`} />
             ))}
           </div>
         ) : allStations.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          <div className={gridClass}>
             {(activeCategory ? allStations : rest).map((station, i) => (
-              <div key={station.id} className="animate-fade-in" style={{ animationDelay: `${i * 0.03}s` }}>
-                <StationCard
-                  station={station}
-                  isFav={favorites.includes(station.id)}
-                  onFavChange={() => toggleFav(station)}
-                />
+              <div key={station.id} className="animate-fade-in" style={{ animationDelay: `${Math.min(i * 0.025, 0.4)}s` }}>
+                <StationCard station={station} isFav={favorites.includes(station.id)} onFavChange={() => toggleFav(station)} view={viewMode} />
               </div>
             ))}
           </div>

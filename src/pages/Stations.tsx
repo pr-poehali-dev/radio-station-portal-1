@@ -10,21 +10,15 @@ interface Category { id: number; name: string; color: string; slug: string; }
 interface Genre { id: number; name: string; }
 
 const CAT_ICONS: Record<string, string> = {
-  'Новости': 'Newspaper',
-  'Музыка': 'Music',
-  'Разговорное': 'MessageSquare',
-  'Спорт': 'Trophy',
-  'Детское': 'Star',
-  'Классика': 'Music2',
-  'Джаз': 'Music4',
-  'Рок': 'Guitar',
-  'Поп': 'Mic2',
-  'Электронная': 'Zap',
+  'Новости': 'Newspaper', 'Музыка': 'Music', 'Разговорное': 'MessageSquare',
+  'Спорт': 'Trophy', 'Детское': 'Star', 'Классика': 'Music2',
+  'Джаз': 'Music4', 'Рок': 'Guitar', 'Поп': 'Mic2', 'Электронная': 'Zap',
 };
 
 export default function Stations() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
+
   const [stations, setStations] = useState<Station[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [genres, setGenres] = useState<Genre[]>([]);
@@ -32,7 +26,9 @@ export default function Stations() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'row'>('grid');
 
   const search = searchParams.get('search') || '';
   const categoryId = searchParams.get('category_id') || '';
@@ -46,20 +42,15 @@ export default function Stations() {
     if (categoryId) p.category_id = categoryId;
     if (genreId) p.genre_id = genreId;
     const res = await radioApi.getStations(p);
-    if (res.ok) {
-      setStations(res.data.stations || []);
-      setTotal(res.data.total || 0);
-    }
+    if (res.ok) { setStations(res.data.stations || []); setTotal(res.data.total || 0); }
     setLoading(false);
   }, [search, categoryId, genreId, sort]);
 
   useEffect(() => { load(); }, [load]);
-
   useEffect(() => {
     radioApi.getCategories().then(r => { if (r.ok) setCategories(r.data.categories || []); });
     radioApi.getGenres().then(r => { if (r.ok) setGenres(r.data.genres || []); });
   }, []);
-
   useEffect(() => {
     if (!user) return;
     userApi.getFavorites().then(r => {
@@ -69,26 +60,17 @@ export default function Stations() {
 
   const setFilter = (key: string, value: string) => {
     const next = new URLSearchParams(searchParams);
-    if (value) next.set(key, value);
-    else next.delete(key);
+    if (value) next.set(key, value); else next.delete(key);
     setSearchParams(next);
-    setSidebarOpen(false);
+    setDrawerOpen(false);
   };
-
-  const resetFilters = () => {
-    setSearchInput('');
-    setSearchParams(new URLSearchParams());
-    setSidebarOpen(false);
-  };
-
+  const resetFilters = () => { setSearchInput(''); setSearchParams(new URLSearchParams()); setDrawerOpen(false); };
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const next = new URLSearchParams(searchParams);
-    if (searchInput) next.set('search', searchInput);
-    else next.delete('search');
+    if (searchInput) next.set('search', searchInput); else next.delete('search');
     setSearchParams(next);
   };
-
   const toggleFav = async (station: Station) => {
     if (!user) return;
     if (favorites.includes(station.id)) {
@@ -102,46 +84,32 @@ export default function Stations() {
 
   const hasFilters = !!(search || categoryId || genreId || sort !== 'listen_count');
   const activeCat = categories.find(c => String(c.id) === categoryId);
+  const activeGenre = genres.find(g => String(g.id) === genreId);
 
-  const FilterPanel = () => (
-    <div className="space-y-6">
-      {/* Categories grid */}
+  const FilterContent = ({ onSelect }: { onSelect?: () => void }) => (
+    <div className="space-y-5">
+      {/* Categories */}
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Категории</p>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => setFilter('category_id', '')}
-            className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-xs font-semibold transition-all ${
-              !categoryId
-                ? 'bg-primary/15 text-primary border-primary/30'
-                : 'bg-secondary/50 text-muted-foreground border-transparent hover:border-border hover:text-foreground'
-            }`}
-          >
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${!categoryId ? 'bg-primary/20' : 'bg-secondary'}`}>
-              <Icon name="Layers" size={16} />
-            </div>
-            Все
-          </button>
-          {categories.map(cat => {
-            const active = categoryId === String(cat.id);
+        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">Категории</p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {[{ id: 0, name: 'Все', color: '' }, ...categories].map(cat => {
+            const active = cat.id === 0 ? !categoryId : categoryId === String(cat.id);
             return (
               <button
                 key={cat.id}
-                onClick={() => setFilter('category_id', active ? '' : String(cat.id))}
-                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-xs font-semibold transition-all ${
+                onClick={() => { setFilter('category_id', cat.id === 0 ? '' : String(cat.id)); onSelect?.(); }}
+                className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-semibold transition-all border ${
                   active
-                    ? 'text-white border-transparent'
-                    : 'bg-secondary/50 text-muted-foreground border-transparent hover:border-border hover:text-foreground'
+                    ? cat.id === 0 ? 'bg-primary/15 text-primary border-primary/30' : 'text-white border-transparent'
+                    : 'bg-secondary/40 text-muted-foreground border-transparent hover:bg-secondary hover:text-foreground'
                 }`}
-                style={active ? { backgroundColor: cat.color, borderColor: cat.color } : undefined}
+                style={active && cat.id !== 0 ? { backgroundColor: cat.color, borderColor: cat.color } : undefined}
               >
-                <div
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center ${active ? 'bg-white/20' : 'bg-secondary'}`}
-                  style={!active ? { color: cat.color } : undefined}
-                >
-                  <Icon name={CAT_ICONS[cat.name] || 'Radio'} size={16} />
+                <div className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 ${active ? 'bg-white/20' : 'bg-background/50'}`}
+                  style={!active && cat.id !== 0 ? { color: cat.color } : undefined}>
+                  <Icon name={cat.id === 0 ? 'Layers' : (CAT_ICONS[cat.name] || 'Radio')} size={13} />
                 </div>
-                <span className="text-center leading-tight">{cat.name}</span>
+                <span className="truncate">{cat.name}</span>
               </button>
             );
           })}
@@ -150,22 +118,19 @@ export default function Stations() {
 
       {/* Sort */}
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Сортировка</p>
-        <div className="space-y-1">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">Сортировка</p>
+        <div className="flex flex-col gap-1">
           {[
             { value: 'listen_count', label: 'По популярности', icon: 'TrendingUp' },
             { value: 'name', label: 'По алфавиту', icon: 'ArrowDownAZ' },
           ].map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => setFilter('sort', opt.value)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+            <button key={opt.value} onClick={() => setFilter('sort', opt.value)}
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
                 sort === opt.value
                   ? 'bg-primary/15 text-primary border border-primary/25'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary/70'
-              }`}
-            >
-              <Icon name={opt.icon} size={15} />
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+              }`}>
+              <Icon name={opt.icon} size={14} />
               {opt.label}
             </button>
           ))}
@@ -175,18 +140,16 @@ export default function Stations() {
       {/* Genres */}
       {genres.length > 0 && (
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Жанры</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">Жанры</p>
           <div className="flex flex-wrap gap-1.5">
             {genres.map(g => (
-              <button
-                key={g.id}
+              <button key={g.id}
                 onClick={() => setFilter('genre_id', genreId === String(g.id) ? '' : String(g.id))}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${
                   genreId === String(g.id)
-                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
-                    : 'bg-secondary/50 text-muted-foreground hover:text-foreground border border-transparent hover:border-border'
-                }`}
-              >
+                    ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40'
+                    : 'bg-secondary/50 text-muted-foreground border-transparent hover:border-border hover:text-foreground'
+                }`}>
                 {g.name}
               </button>
             ))}
@@ -194,162 +157,196 @@ export default function Stations() {
         </div>
       )}
 
-      {/* Reset */}
       {hasFilters && (
-        <button
-          onClick={resetFilters}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all"
-        >
-          <Icon name="RotateCcw" size={14} />
-          Сбросить фильтры
+        <button onClick={resetFilters}
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-border/60 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all">
+          <Icon name="RotateCcw" size={13} />Сбросить всё
         </button>
       )}
     </div>
   );
 
-  return (
-    <div className="min-h-screen animate-fade-in">
+  const gridClass = viewMode === 'grid'
+    ? 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3'
+    : 'flex flex-col gap-2';
 
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+  return (
+    <div className="flex min-h-screen animate-fade-in">
+
+      {/* Mobile drawer overlay */}
+      {drawerOpen && (
+        <div className="fixed inset-0 bg-black/70 z-40 lg:hidden" onClick={() => setDrawerOpen(false)} />
       )}
 
       {/* Mobile filter drawer */}
-      <div className={`fixed top-0 left-0 h-full w-72 z-50 flex flex-col bg-[hsl(222,25%,7%)] border-r border-border/50 transition-transform duration-300 lg:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex items-center justify-between px-5 h-14 border-b border-border/50 flex-shrink-0">
-          <span className="font-semibold text-sm">Фильтры</span>
-          <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
+      <div className={`fixed inset-y-0 left-0 w-72 z-50 flex flex-col bg-[hsl(222,25%,7%)] border-r border-border/50 transition-transform duration-300 ease-in-out lg:hidden ${drawerOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex items-center justify-between px-4 h-14 border-b border-border/50 flex-shrink-0">
+          <span className="font-semibold text-sm flex items-center gap-2">
+            <Icon name="SlidersHorizontal" size={16} className="text-primary" />Фильтры
+          </span>
+          <button onClick={() => setDrawerOpen(false)} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
             <Icon name="X" size={18} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-4">
-          <FilterPanel />
+          <FilterContent onSelect={() => setDrawerOpen(false)} />
         </div>
       </div>
 
-      <div className="flex">
-        {/* Desktop sidebar */}
-        <aside className="hidden lg:flex flex-col w-64 xl:w-72 flex-shrink-0 sticky top-0 h-screen overflow-y-auto border-r border-border/50 p-5">
-          <div className="mb-5">
-            <h2 className="font-oswald text-lg font-bold">Фильтры</h2>
-          </div>
-          <FilterPanel />
-        </aside>
-
-        {/* Main */}
-        <div className="flex-1 min-w-0 px-4 md:px-6 py-6">
-
-          {/* Header */}
-          <div className="flex items-start justify-between gap-4 mb-6">
-            <div>
-              <h1 className="font-oswald text-2xl md:text-3xl font-bold gradient-text">
-                {activeCat ? activeCat.name : 'Радиостанции'}
-              </h1>
-              <p className="text-muted-foreground text-sm mt-0.5">
-                {loading ? '...' : `${total} станций`}
-                {activeCat && <span className="ml-2 text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: activeCat.color }}>{activeCat.name}</span>}
-              </p>
-            </div>
-
-            {/* Mobile filter button */}
+      {/* Desktop sidebar */}
+      <aside className={`hidden lg:flex flex-col flex-shrink-0 border-r border-border/50 transition-all duration-300 overflow-hidden ${sidebarCollapsed ? 'w-14' : 'w-60 xl:w-64'}`}>
+        <div className={`sticky top-0 h-screen overflow-y-auto flex flex-col`}>
+          {/* Sidebar header */}
+          <div className="flex items-center justify-between px-3 py-4 border-b border-border/50 flex-shrink-0">
+            {!sidebarCollapsed && <span className="font-semibold text-sm">Фильтры</span>}
             <button
-              onClick={() => setSidebarOpen(true)}
-              className={`lg:hidden flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-all flex-shrink-0 ${hasFilters ? 'bg-primary/15 text-primary border border-primary/30' : 'bg-secondary text-muted-foreground'}`}
+              onClick={() => setSidebarCollapsed(c => !c)}
+              className={`p-1.5 rounded-lg hover:bg-secondary transition-colors flex-shrink-0 ${sidebarCollapsed ? 'mx-auto' : 'ml-auto'}`}
             >
-              <Icon name="SlidersHorizontal" size={16} />
-              Фильтры
-              {hasFilters && <span className="w-2 h-2 rounded-full bg-primary" />}
+              <Icon name={sidebarCollapsed ? 'PanelLeftOpen' : 'PanelLeftClose'} size={17} />
             </button>
           </div>
 
-          {/* Search */}
-          <form onSubmit={handleSearch} className="relative mb-5">
-            <Icon name="Search" size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            <input
-              type="text"
-              value={searchInput}
-              onChange={e => setSearchInput(e.target.value)}
-              placeholder="Поиск по названию, городу, частоте..."
-              className="w-full pl-11 pr-10 py-3 rounded-xl bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
-            />
-            {searchInput && (
-              <button
-                type="button"
-                onClick={() => { setSearchInput(''); setFilter('search', ''); }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Icon name="X" size={16} />
-              </button>
-            )}
-          </form>
+          {/* Collapsed icons */}
+          {sidebarCollapsed ? (
+            <div className="flex flex-col items-center gap-2 pt-4 px-2">
+              {[{ id: 0, name: 'Все', color: '', icon: 'Layers' }, ...categories.map(c => ({ ...c, icon: CAT_ICONS[c.name] || 'Radio' }))].map(cat => {
+                const active = cat.id === 0 ? !categoryId : categoryId === String(cat.id);
+                return (
+                  <button key={cat.id}
+                    onClick={() => setFilter('category_id', cat.id === 0 ? '' : String(cat.id))}
+                    title={cat.name}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all border ${active ? 'border-primary/40 bg-primary/20 text-primary' : 'border-transparent bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground'}`}
+                    style={active && cat.id !== 0 ? { backgroundColor: `${cat.color}30`, borderColor: `${cat.color}60`, color: cat.color } : undefined}
+                  >
+                    <Icon name={cat.icon} size={16} />
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto p-4">
+              <FilterContent />
+            </div>
+          )}
+        </div>
+      </aside>
 
-          {/* Active filters chips */}
+      {/* Main content */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        <div className="px-4 md:px-5 py-5">
+
+          {/* Top bar */}
+          <div className="flex items-center gap-3 mb-5">
+            {/* Mobile filter btn */}
+            <button onClick={() => setDrawerOpen(true)}
+              className={`lg:hidden flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold flex-shrink-0 transition-all ${
+                hasFilters ? 'bg-primary/15 text-primary border border-primary/30' : 'bg-secondary text-muted-foreground'
+              }`}>
+              <Icon name="SlidersHorizontal" size={15} />
+              {hasFilters && <span className="w-2 h-2 rounded-full bg-primary" />}
+            </button>
+
+            {/* Search */}
+            <form onSubmit={handleSearch} className="relative flex-1">
+              <Icon name="Search" size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={e => setSearchInput(e.target.value)}
+                placeholder="Станция, город, частота..."
+                className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-all"
+              />
+              {searchInput && (
+                <button type="button" onClick={() => { setSearchInput(''); setFilter('search', ''); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <Icon name="X" size={15} />
+                </button>
+              )}
+            </form>
+
+            {/* View toggle */}
+            <div className="flex items-center bg-secondary rounded-xl p-1 flex-shrink-0">
+              <button onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+                <Icon name="LayoutGrid" size={16} />
+              </button>
+              <button onClick={() => setViewMode('row')}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'row' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+                <Icon name="List" size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Active filter chips */}
           {hasFilters && (
-            <div className="flex flex-wrap gap-2 mb-5">
+            <div className="flex flex-wrap gap-1.5 mb-4">
               {search && (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/15 text-primary text-xs font-medium border border-primary/25">
-                  <Icon name="Search" size={12} />
-                  «{search}»
-                  <button onClick={() => { setSearchInput(''); setFilter('search', ''); }} className="hover:text-white transition-colors"><Icon name="X" size={11} /></button>
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/15 text-primary text-xs font-medium border border-primary/25">
+                  <Icon name="Search" size={11} />«{search}»
+                  <button onClick={() => { setSearchInput(''); setFilter('search', ''); }}><Icon name="X" size={10} /></button>
                 </span>
               )}
               {activeCat && (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-xs font-medium" style={{ backgroundColor: `${activeCat.color}33`, border: `1px solid ${activeCat.color}66`, color: activeCat.color }}>
-                  <Icon name={CAT_ICONS[activeCat.name] || 'Radio'} size={12} />
-                  {activeCat.name}
-                  <button onClick={() => setFilter('category_id', '')} className="hover:opacity-70 transition-opacity"><Icon name="X" size={11} /></button>
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border"
+                  style={{ backgroundColor: `${activeCat.color}20`, borderColor: `${activeCat.color}50`, color: activeCat.color }}>
+                  <Icon name={CAT_ICONS[activeCat.name] || 'Radio'} size={11} />{activeCat.name}
+                  <button onClick={() => setFilter('category_id', '')}><Icon name="X" size={10} /></button>
                 </span>
               )}
-              {genreId && genres.find(g => String(g.id) === genreId) && (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-500/15 text-cyan-400 text-xs font-medium border border-cyan-500/25">
-                  <Icon name="Music" size={12} />
-                  {genres.find(g => String(g.id) === genreId)?.name}
-                  <button onClick={() => setFilter('genre_id', '')} className="hover:text-white transition-colors"><Icon name="X" size={11} /></button>
+              {activeGenre && (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/15 text-cyan-400 text-xs font-medium border border-cyan-500/25">
+                  <Icon name="Music" size={11} />{activeGenre.name}
+                  <button onClick={() => setFilter('genre_id', '')}><Icon name="X" size={10} /></button>
                 </span>
               )}
               {sort === 'name' && (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary text-muted-foreground text-xs font-medium border border-border">
-                  <Icon name="ArrowDownAZ" size={12} />
-                  По алфавиту
-                  <button onClick={() => setFilter('sort', 'listen_count')} className="hover:text-foreground transition-colors"><Icon name="X" size={11} /></button>
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-secondary text-muted-foreground text-xs font-medium border border-border">
+                  <Icon name="ArrowDownAZ" size={11} />По алфавиту
+                  <button onClick={() => setFilter('sort', 'listen_count')}><Icon name="X" size={10} /></button>
                 </span>
               )}
             </div>
           )}
 
+          {/* Title row */}
+          <div className="flex items-baseline gap-3 mb-4">
+            <h1 className="font-oswald text-xl font-bold gradient-text">
+              {activeCat ? activeCat.name : 'Все станции'}
+            </h1>
+            <span className="text-sm text-muted-foreground">{loading ? '...' : `${total} станций`}</span>
+          </div>
+
           {/* Grid */}
           {loading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div key={i} className="gradient-card rounded-2xl h-44 animate-pulse" />
+            <div className={gridClass}>
+              {Array.from({ length: viewMode === 'grid' ? 12 : 8 }).map((_, i) => (
+                <div key={i} className={`gradient-card animate-pulse ${viewMode === 'grid' ? 'rounded-2xl h-44' : 'rounded-xl h-16'}`} />
               ))}
             </div>
           ) : stations.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4">
+            <div className={gridClass}>
               {stations.map((station, i) => (
-                <div key={station.id} className="animate-fade-in" style={{ animationDelay: `${Math.min(i * 0.03, 0.3)}s` }}>
+                <div key={station.id} className="animate-fade-in" style={{ animationDelay: `${Math.min(i * 0.025, 0.4)}s` }}>
                   <StationCard
                     station={station}
                     isFav={favorites.includes(station.id)}
                     onFavChange={() => toggleFav(station)}
+                    view={viewMode}
                   />
                 </div>
               ))}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-24 text-center">
-              <div className="w-20 h-20 rounded-2xl bg-secondary flex items-center justify-center mb-4">
-                <Icon name="Radio" size={36} className="text-muted-foreground opacity-40" />
+              <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center mb-4">
+                <Icon name="Radio" size={28} className="text-muted-foreground opacity-40" />
               </div>
-              <p className="text-lg font-semibold mb-1">Станции не найдены</p>
+              <p className="font-semibold mb-1">Ничего не найдено</p>
               <p className="text-muted-foreground text-sm mb-5">Попробуйте изменить параметры поиска</p>
-              <button
-                onClick={resetFilters}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary/15 text-primary border border-primary/30 text-sm font-semibold hover:bg-primary/25 transition-all"
-              >
-                <Icon name="RotateCcw" size={15} />
-                Сбросить фильтры
+              <button onClick={resetFilters}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/15 text-primary border border-primary/30 text-sm font-semibold hover:bg-primary/25 transition-all">
+                <Icon name="RotateCcw" size={14} />Сбросить фильтры
               </button>
             </div>
           )}
