@@ -90,10 +90,18 @@ def handler(event: dict, context) -> dict:
             return get_categories()
         elif action == 'create_category' and method == 'POST':
             return create_category(event)
+        elif action == 'update_category' and method == 'POST':
+            return update_category(event, params.get('id', ''))
+        elif action == 'delete_category' and method == 'POST':
+            return delete_category(params.get('id', ''))
         elif action == 'genres' and method == 'GET':
             return get_genres()
         elif action == 'create_genre' and method == 'POST':
             return create_genre(event)
+        elif action == 'update_genre' and method == 'POST':
+            return update_genre(event, params.get('id', ''))
+        elif action == 'delete_genre' and method == 'POST':
+            return delete_genre(params.get('id', ''))
         else:
             return err('Not found', 404)
     except Exception as e:
@@ -414,6 +422,44 @@ def get_genres() -> dict:
         conn.close()
 
 
+def update_category(event: dict, category_id: str) -> dict:
+    if not category_id:
+        return err('ID категории обязателен')
+    body = json.loads(event.get('body', '{}'))
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        fields, args = [], []
+        for field in ['name', 'slug', 'color']:
+            if field in body:
+                fields.append(f"{field} = %s")
+                args.append(body[field])
+        if not fields:
+            return err('Нет полей для обновления')
+        args.append(category_id)
+        cur.execute(f"UPDATE {SCHEMA}.categories SET {', '.join(fields)} WHERE id = %s", args)
+        conn.commit()
+        return ok({'ok': True})
+    finally:
+        cur.close()
+        conn.close()
+
+
+def delete_category(category_id: str) -> dict:
+    if not category_id:
+        return err('ID категории обязателен')
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"UPDATE {SCHEMA}.radio_stations SET category_id = NULL WHERE category_id = %s", (category_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.categories WHERE id = %s", (category_id,))
+        conn.commit()
+        return ok({'ok': True})
+    finally:
+        cur.close()
+        conn.close()
+
+
 def create_genre(event: dict) -> dict:
     body = json.loads(event.get('body', '{}'))
     name = body.get('name', '').strip()
@@ -427,6 +473,44 @@ def create_genre(event: dict) -> dict:
         row = cur.fetchone()
         conn.commit()
         return ok({'ok': True, 'id': row[0] if row else None})
+    finally:
+        cur.close()
+        conn.close()
+
+
+def update_genre(event: dict, genre_id: str) -> dict:
+    if not genre_id:
+        return err('ID жанра обязателен')
+    body = json.loads(event.get('body', '{}'))
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        fields, args = [], []
+        for field in ['name', 'slug']:
+            if field in body:
+                fields.append(f"{field} = %s")
+                args.append(body[field])
+        if not fields:
+            return err('Нет полей для обновления')
+        args.append(genre_id)
+        cur.execute(f"UPDATE {SCHEMA}.genres SET {', '.join(fields)} WHERE id = %s", args)
+        conn.commit()
+        return ok({'ok': True})
+    finally:
+        cur.close()
+        conn.close()
+
+
+def delete_genre(genre_id: str) -> dict:
+    if not genre_id:
+        return err('ID жанра обязателен')
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"UPDATE {SCHEMA}.radio_stations SET genre_id = NULL WHERE genre_id = %s", (genre_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.genres WHERE id = %s", (genre_id,))
+        conn.commit()
+        return ok({'ok': True})
     finally:
         cur.close()
         conn.close()

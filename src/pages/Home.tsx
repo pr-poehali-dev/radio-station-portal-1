@@ -204,22 +204,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured stations (top row) */}
-      {featured.length > 0 && !activeCategory && (
-        <section>
-          <h2 className="font-oswald text-lg font-bold flex items-center gap-2 mb-3">
-            <Icon name="Star" size={18} className="text-yellow-400" />Рекомендуем
-          </h2>
-          <div className={gridClass}>
-            {featured.slice(0, 5).map((station, i) => (
-              <div key={station.id} className="animate-fade-in" style={{ animationDelay: `${i * 0.05}s` }}>
-                <StationCard station={station} isFav={favorites.includes(station.id)} onFavChange={() => toggleFav(station)} view={viewMode} />
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
       {/* All Stations grid */}
       <section>
         <div className="flex items-center justify-between mb-3">
@@ -229,7 +213,6 @@ export default function Home() {
             {allStations.length > 0 && <span className="text-sm font-normal text-muted-foreground">({allStations.length})</span>}
           </h2>
           <div className="flex items-center gap-2">
-            {/* View toggle */}
             <div className="flex items-center bg-secondary rounded-xl p-1">
               <button onClick={() => setViewMode('grid')}
                 className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
@@ -267,6 +250,22 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {/* Featured stations — after all */}
+      {featured.length > 0 && !activeCategory && (
+        <section>
+          <h2 className="font-oswald text-lg font-bold flex items-center gap-2 mb-3">
+            <Icon name="Star" size={18} className="text-yellow-400" />Рекомендуем
+          </h2>
+          <div className={gridClass}>
+            {featured.slice(0, 5).map((station, i) => (
+              <div key={station.id} className="animate-fade-in" style={{ animationDelay: `${i * 0.05}s` }}>
+                <StationCard station={station} isFav={favorites.includes(station.id)} onFavChange={() => toggleFav(station)} view={viewMode} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Donate CTA */}
       <Link to="/donate" className="block rounded-2xl overflow-hidden neon-border group hover:scale-[1.01] transition-all">

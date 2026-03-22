@@ -54,7 +54,9 @@ export default function Admin() {
   const [newBanner, setNewBanner] = useState(false);
   const [searchStations, setSearchStations] = useState('');
   const [catForm, setCatForm] = useState({ name: '', slug: '', color: '#8b5cf6' });
+  const [editCat, setEditCat] = useState<{ id: number; name: string; slug: string; color: string } | null>(null);
   const [genreForm, setGenreForm] = useState({ name: '', slug: '' });
+  const [editGenre, setEditGenre] = useState<{ id: number; name: string; slug: string } | null>(null);
 
   useEffect(() => {
     if (!user || user.role !== 'admin') { navigate('/'); return; }
@@ -554,23 +556,46 @@ export default function Admin() {
       {/* Categories & Genres */}
       {!loading && tab === 'categories' && (
         <div className="grid md:grid-cols-2 gap-6">
+          {/* Categories */}
           <div>
             <h3 className="font-semibold mb-3 flex items-center gap-2"><Icon name="Grid" size={16} className="text-primary" />Категории</h3>
             <div className="space-y-2 mb-4">
               {categories.map(cat => (
-                <div key={cat.id} className="flex items-center gap-3 p-3 gradient-card rounded-xl">
+                <div key={cat.id} className="flex items-center gap-3 p-3 gradient-card rounded-xl group">
                   <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                  <span className="text-sm font-medium flex-1">{cat.name}</span>
-                  <span className="text-xs text-muted-foreground">{cat.slug}</span>
+                  {editCat?.id === cat.id ? (
+                    <div className="flex-1 flex items-center gap-2 flex-wrap">
+                      <input value={editCat.name} onChange={e => setEditCat(c => c ? { ...c, name: e.target.value } : c)}
+                        className="flex-1 min-w-0 px-2 py-1 rounded-lg bg-secondary border border-border text-sm focus:outline-none" />
+                      <input value={editCat.slug} onChange={e => setEditCat(c => c ? { ...c, slug: e.target.value } : c)}
+                        className="w-24 px-2 py-1 rounded-lg bg-secondary border border-border text-sm focus:outline-none" />
+                      <input type="color" value={editCat.color} onChange={e => setEditCat(c => c ? { ...c, color: e.target.value } : c)}
+                        className="w-7 h-7 rounded cursor-pointer bg-transparent border-0 p-0" />
+                      <button onClick={async () => { await adminApi.updateCategory(editCat.id, editCat); setEditCat(null); loadTab('categories'); }}
+                        className="px-2 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-semibold">OK</button>
+                      <button onClick={() => setEditCat(null)} className="px-2 py-1 rounded-lg bg-secondary text-xs">✕</button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-sm font-medium flex-1">{cat.name}</span>
+                      <span className="text-xs text-muted-foreground">{cat.slug}</span>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => setEditCat(cat)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+                          <Icon name="Pencil" size={13} />
+                        </button>
+                        <button onClick={async () => { if (!confirm('Удалить категорию?')) return; await adminApi.deleteCategory(cat.id); loadTab('categories'); }}
+                          className="p-1.5 rounded-lg hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors">
+                          <Icon name="Trash2" size={13} />
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
             <div className="gradient-card rounded-xl p-4 space-y-2">
               <p className="text-sm font-medium">Добавить категорию</p>
-              {[
-                { key: 'name', ph: 'Название' },
-                { key: 'slug', ph: 'slug (латиница)' },
-              ].map(f => (
+              {[{ key: 'name', ph: 'Название' }, { key: 'slug', ph: 'slug (латиница)' }].map(f => (
                 <input key={f.key} value={(catForm as Record<string, string>)[f.key]} onChange={e => setCatForm(c => ({ ...c, [f.key]: e.target.value }))} placeholder={f.ph}
                   className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none" />
               ))}
@@ -585,20 +610,44 @@ export default function Admin() {
             </div>
           </div>
 
+          {/* Genres */}
           <div>
             <h3 className="font-semibold mb-3 flex items-center gap-2"><Icon name="Music" size={16} className="text-cyan-400" />Жанры</h3>
             <div className="space-y-2 mb-4">
               {genres.map(g => (
-                <div key={g.id} className="flex items-center gap-3 p-3 gradient-card rounded-xl">
-                  <Icon name="Music2" size={14} className="text-muted-foreground" />
-                  <span className="text-sm font-medium">{g.name}</span>
+                <div key={g.id} className="flex items-center gap-3 p-3 gradient-card rounded-xl group">
+                  <Icon name="Music2" size={14} className="text-muted-foreground flex-shrink-0" />
+                  {editGenre?.id === g.id ? (
+                    <div className="flex-1 flex items-center gap-2">
+                      <input value={editGenre.name} onChange={e => setEditGenre(v => v ? { ...v, name: e.target.value } : v)}
+                        className="flex-1 px-2 py-1 rounded-lg bg-secondary border border-border text-sm focus:outline-none" />
+                      <input value={editGenre.slug} onChange={e => setEditGenre(v => v ? { ...v, slug: e.target.value } : v)}
+                        className="w-24 px-2 py-1 rounded-lg bg-secondary border border-border text-sm focus:outline-none" />
+                      <button onClick={async () => { await adminApi.updateGenre(editGenre.id, editGenre); setEditGenre(null); loadTab('categories'); }}
+                        className="px-2 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-semibold">OK</button>
+                      <button onClick={() => setEditGenre(null)} className="px-2 py-1 rounded-lg bg-secondary text-xs">✕</button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-sm font-medium flex-1">{g.name}</span>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => setEditGenre(g)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+                          <Icon name="Pencil" size={13} />
+                        </button>
+                        <button onClick={async () => { if (!confirm('Удалить жанр?')) return; await adminApi.deleteGenre(g.id); loadTab('categories'); }}
+                          className="p-1.5 rounded-lg hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors">
+                          <Icon name="Trash2" size={13} />
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
             <div className="gradient-card rounded-xl p-4 space-y-2">
               <p className="text-sm font-medium">Добавить жанр</p>
               {[{ key: 'name', ph: 'Название' }, { key: 'slug', ph: 'slug' }].map(f => (
-                <input key={f.key} value={(genreForm as Record<string, string>)[f.key]} onChange={e => setGenreForm(g => ({ ...g, [f.key]: e.target.value }))} placeholder={f.ph}
+                <input key={f.key} value={(genreForm as Record<string, string>)[f.key]} onChange={e => setGenreForm(v => ({ ...v, [f.key]: e.target.value }))} placeholder={f.ph}
                   className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none" />
               ))}
               <button onClick={async () => { await adminApi.createGenre(genreForm); setGenreForm({ name: '', slug: '' }); loadTab('categories'); }}

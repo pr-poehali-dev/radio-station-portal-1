@@ -101,8 +101,16 @@ export const adminApi = {
     call('admin', 'update_banner', 'POST', body, { id: String(id) }),
   getCategories: () => call('admin', 'categories'),
   createCategory: (body: unknown) => call('admin', 'create_category', 'POST', body),
+  updateCategory: (id: number, body: unknown) =>
+    call('admin', 'update_category', 'POST', body, { id: String(id) }),
+  deleteCategory: (id: number) =>
+    call('admin', 'delete_category', 'POST', undefined, { id: String(id) }),
   getGenres: () => call('admin', 'genres'),
   createGenre: (body: unknown) => call('admin', 'create_genre', 'POST', body),
+  updateGenre: (id: number, body: unknown) =>
+    call('admin', 'update_genre', 'POST', body, { id: String(id) }),
+  deleteGenre: (id: number) =>
+    call('admin', 'delete_genre', 'POST', undefined, { id: String(id) }),
   uploadImage: (file_data: string, file_name: string, content_type: string) =>
     call('admin', 'upload', 'POST', { file_data, file_name, content_type }),
 };
