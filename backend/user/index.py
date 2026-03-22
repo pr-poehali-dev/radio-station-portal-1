@@ -42,26 +42,28 @@ def get_user_id(event: dict):
 
 
 def handler(event: dict, context) -> dict:
-    """История и избранное: history GET/POST, favorites GET/POST/DELETE"""
+    """История и избранное: маршрутизация через ?action="""
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
     method = event.get('httpMethod', 'GET')
-    path = event.get('path', '/')
+    params = event.get('queryStringParameters') or {}
+    action = params.get('action', '')
+
     user_id = get_user_id(event)
     if not user_id:
         return err('Не авторизован', 401)
 
     try:
-        if '/history' in path and method == 'GET':
+        if method == 'GET' and action == 'history':
             return get_history(event, user_id)
-        elif '/history' in path and method == 'POST':
+        elif method == 'POST' and action == 'add_history':
             return add_history(event, user_id)
-        elif '/favorites' in path and method == 'GET':
+        elif method == 'GET' and action == 'favorites':
             return get_favorites(user_id)
-        elif '/favorites' in path and method == 'POST':
+        elif method == 'POST' and action == 'add_favorite':
             return add_favorite(event, user_id)
-        elif '/favorites' in path and method == 'DELETE':
+        elif method == 'POST' and action == 'remove_favorite':
             return remove_favorite(event, user_id)
         else:
             return err('Not found', 404)
@@ -91,11 +93,10 @@ def get_history(event: dict, user_id: int) -> dict:
         rows = cur.fetchall()
         cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.listen_history WHERE user_id = %s", (user_id,))
         total = cur.fetchone()[0]
-        history = [{
-            'id': r[0], 'listened_at': str(r[1]), 'duration_seconds': r[2],
-            'station': {'id': r[3], 'name': r[4], 'cover_url': r[5], 'city': r[6], 'frequency': r[7],
-                        'category_name': r[8], 'category_color': r[9], 'genre_name': r[10], 'stream_url': r[11]}
-        } for r in rows]
+        history = [{'id': r[0], 'listened_at': str(r[1]), 'duration_seconds': r[2],
+                    'station': {'id': r[3], 'name': r[4], 'cover_url': r[5], 'city': r[6],
+                                'frequency': r[7], 'category_name': r[8], 'category_color': r[9],
+                                'genre_name': r[10], 'stream_url': r[11]}} for r in rows]
         return ok({'history': history, 'total': total})
     finally:
         cur.close()
@@ -103,7 +104,7 @@ def get_history(event: dict, user_id: int) -> dict:
 
 
 def add_history(event: dict, user_id: int) -> dict:
-    body = json.loads(event.get('body', '{}'))
+    body = json.loads(event.get('body', '{}') or '{}')
     station_id = body.get('station_id')
     duration = body.get('duration_seconds', 0)
     if not station_id:
@@ -135,17 +136,16 @@ def get_favorites(user_id: int) -> dict:
             ORDER BY f.created_at DESC
         """, (user_id,))
         rows = cur.fetchall()
-        stations = [{'id': r[0], 'name': r[1], 'cover_url': r[2], 'city': r[3], 'frequency': r[4],
-                     'listen_count': r[5], 'category_name': r[6], 'category_color': r[7], 'genre_name': r[8],
-                     'stream_url': r[9]} for r in rows]
-        return ok({'favorites': stations})
+        return ok({'favorites': [{'id': r[0], 'name': r[1], 'cover_url': r[2], 'city': r[3],
+                                   'frequency': r[4], 'listen_count': r[5], 'category_name': r[6],
+                                   'category_color': r[7], 'genre_name': r[8], 'stream_url': r[9]} for r in rows]})
     finally:
         cur.close()
         conn.close()
 
 
 def add_favorite(event: dict, user_id: int) -> dict:
-    body = json.loads(event.get('body', '{}'))
+    body = json.loads(event.get('body', '{}') or '{}')
     station_id = body.get('station_id')
     if not station_id:
         return err('station_id required')
@@ -153,8 +153,7 @@ def add_favorite(event: dict, user_id: int) -> dict:
     cur = conn.cursor()
     try:
         cur.execute(f"SELECT id FROM {SCHEMA}.favorites WHERE user_id = %s AND station_id = %s", (user_id, station_id))
-        existing = cur.fetchone()
-        if existing:
+        if cur.fetchone():
             cur.execute(f"UPDATE {SCHEMA}.favorites SET removed_at = NULL WHERE user_id = %s AND station_id = %s", (user_id, station_id))
         else:
             cur.execute(f"INSERT INTO {SCHEMA}.favorites (user_id, station_id) VALUES (%s, %s)", (user_id, station_id))
@@ -166,11 +165,8 @@ def add_favorite(event: dict, user_id: int) -> dict:
 
 
 def remove_favorite(event: dict, user_id: int) -> dict:
-    body = json.loads(event.get('body', '{}'))
+    body = json.loads(event.get('body', '{}') or '{}')
     station_id = body.get('station_id')
-    if not station_id:
-        params = event.get('queryStringParameters') or {}
-        station_id = params.get('station_id')
     if not station_id:
         return err('station_id required')
     conn = get_db()

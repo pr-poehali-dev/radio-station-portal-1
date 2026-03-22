@@ -50,47 +50,45 @@ def get_admin_user(event: dict):
 
 
 def handler(event: dict, context) -> dict:
-    """Администрирование: аналитика, станции, баннеры, пользователи, загрузка файлов"""
+    """Администрирование: маршрутизация через ?action="""
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
     method = event.get('httpMethod', 'GET')
-    path = event.get('path', '/')
+    params = event.get('queryStringParameters') or {}
+    action = params.get('action', '')
     admin_id = get_admin_user(event)
     if not admin_id:
         return err('Доступ запрещён', 403)
 
     try:
-        if '/analytics' in path:
+        if action == 'analytics':
             return get_analytics()
-        elif '/upload' in path and method == 'POST':
+        elif action == 'upload' and method == 'POST':
             return upload_image(event)
-        elif '/stations' in path and method == 'GET':
+        elif action == 'stations' and method == 'GET':
             return get_all_stations(event)
-        elif '/stations' in path and method == 'POST':
+        elif action == 'create_station' and method == 'POST':
             return create_station(event)
-        elif '/station/' in path and method == 'PUT':
-            station_id = path.split('/station/')[-1].strip('/')
-            return update_station(event, station_id)
-        elif '/station/' in path and method == 'DELETE':
-            station_id = path.split('/station/')[-1].strip('/')
-            return deactivate_station(station_id)
-        elif '/users' in path:
+        elif action == 'update_station' and method == 'POST':
+            return update_station(event, params.get('id', ''))
+        elif action == 'delete_station' and method == 'POST':
+            return deactivate_station(params.get('id', ''))
+        elif action == 'users':
             return get_users(event)
-        elif '/banners' in path and method == 'GET':
+        elif action == 'banners' and method == 'GET':
             return get_banners()
-        elif '/banners' in path and method == 'POST':
+        elif action == 'create_banner' and method == 'POST':
             return create_banner(event)
-        elif '/banner/' in path and method == 'PUT':
-            banner_id = path.split('/banner/')[-1].strip('/')
-            return update_banner(event, banner_id)
-        elif '/categories' in path and method == 'GET':
+        elif action == 'update_banner' and method == 'POST':
+            return update_banner(event, params.get('id', ''))
+        elif action == 'categories' and method == 'GET':
             return get_categories()
-        elif '/categories' in path and method == 'POST':
+        elif action == 'create_category' and method == 'POST':
             return create_category(event)
-        elif '/genres' in path and method == 'GET':
+        elif action == 'genres' and method == 'GET':
             return get_genres()
-        elif '/genres' in path and method == 'POST':
+        elif action == 'create_genre' and method == 'POST':
             return create_genre(event)
         else:
             return err('Not found', 404)

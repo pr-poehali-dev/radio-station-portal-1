@@ -33,29 +33,27 @@ def err(msg, code=400):
 
 
 def handler(event: dict, context) -> dict:
-    """Обработчик авторизации: регистрация, вход, выход, получение профиля"""
+    """Авторизация: маршрутизация через ?action="""
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
     method = event.get('httpMethod', 'GET')
-    path = event.get('path', '/')
+    params = event.get('queryStringParameters') or {}
+    action = params.get('action', '')
 
     try:
-        if method == 'POST' and '/register' in path:
+        if method == 'POST' and action == 'register':
             return register(event)
-        elif method == 'POST' and '/login' in path:
+        elif method == 'POST' and action == 'login':
             return login(event)
-        elif method == 'POST' and '/logout' in path:
+        elif method == 'POST' and action == 'logout':
             return logout(event)
-        elif method == 'GET' and '/me' in path:
+        elif method == 'GET' and action == 'me':
             return get_me(event)
-        elif method == 'PUT' and '/profile' in path:
+        elif method == 'PUT' and action == 'profile':
             return update_profile(event)
-        elif method == 'POST' and '/reset-admin' in path:
+        elif method == 'POST' and action == 'reset_admin':
             return reset_admin_password()
-        elif method == 'GET' and '/debug-hash' in path:
-            pw = (event.get('queryStringParameters') or {}).get('pw', 'admin123')
-            return ok({'hash': hash_password(pw), 'pw': pw})
         else:
             return err('Not found', 404)
     except Exception as e:
@@ -89,10 +87,8 @@ def register(event: dict) -> dict:
         session_id = secrets.token_hex(32)
         cur.execute(f"INSERT INTO {SCHEMA}.sessions (id, user_id) VALUES (%s, %s)", (session_id, user[0]))
         conn.commit()
-        return ok({
-            'session_id': session_id,
-            'user': {'id': user[0], 'username': user[1], 'email': user[2], 'role': user[3]}
-        })
+        return ok({'session_id': session_id,
+                   'user': {'id': user[0], 'username': user[1], 'email': user[2], 'role': user[3]}})
     finally:
         cur.close()
         conn.close()
@@ -121,10 +117,9 @@ def login(event: dict) -> dict:
         session_id = secrets.token_hex(32)
         cur.execute(f"INSERT INTO {SCHEMA}.sessions (id, user_id) VALUES (%s, %s)", (session_id, user[0]))
         conn.commit()
-        return ok({
-            'session_id': session_id,
-            'user': {'id': user[0], 'username': user[1], 'email': user[2], 'role': user[3], 'avatar_url': user[4]}
-        })
+        return ok({'session_id': session_id,
+                   'user': {'id': user[0], 'username': user[1], 'email': user[2],
+                            'role': user[3], 'avatar_url': user[4]}})
     finally:
         cur.close()
         conn.close()
@@ -164,10 +159,8 @@ def get_me(event: dict) -> dict:
         user = cur.fetchone()
         if not user:
             return err('Сессия истекла', 401)
-        return ok({'user': {
-            'id': user[0], 'username': user[1], 'email': user[2],
-            'role': user[3], 'avatar_url': user[4], 'created_at': str(user[5])
-        }})
+        return ok({'user': {'id': user[0], 'username': user[1], 'email': user[2],
+                            'role': user[3], 'avatar_url': user[4], 'created_at': str(user[5])}})
     finally:
         cur.close()
         conn.close()
@@ -203,7 +196,7 @@ def reset_admin_password() -> dict:
     try:
         cur.execute(f"UPDATE {SCHEMA}.users SET password_hash = %s WHERE username = 'admin'", (new_hash,))
         conn.commit()
-        return ok({'ok': True, 'hash': new_hash})
+        return ok({'ok': True})
     finally:
         cur.close()
         conn.close()

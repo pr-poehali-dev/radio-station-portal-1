@@ -26,29 +26,28 @@ def err(msg, code=400):
 
 
 def handler(event: dict, context) -> dict:
-    """Получение списка и деталей радиостанций"""
+    """Радиостанции: маршрутизация через ?action="""
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
     method = event.get('httpMethod', 'GET')
-    path = event.get('path', '/')
     params = event.get('queryStringParameters') or {}
+    action = params.get('action', 'list')
 
     try:
-        if method == 'GET' and '/categories' in path:
+        if method == 'GET' and action == 'categories':
             return get_categories()
-        elif method == 'GET' and '/genres' in path:
+        elif method == 'GET' and action == 'genres':
             return get_genres()
-        elif method == 'GET' and '/popular' in path:
+        elif method == 'GET' and action == 'popular':
             return get_popular(params)
-        elif method == 'GET' and '/station/' in path:
-            station_id = path.split('/station/')[-1].strip('/')
-            return get_station(station_id)
-        elif method == 'GET' and '/slider' in path:
+        elif method == 'GET' and action == 'station':
+            return get_station(params.get('id', ''))
+        elif method == 'GET' and action == 'slider':
             return get_slider()
-        elif method == 'GET':
+        elif method == 'GET' and action == 'list':
             return get_stations(params)
-        elif method == 'POST' and '/listen' in path:
+        elif method == 'POST' and action == 'listen':
             return increment_listen(event)
         else:
             return err('Not found', 404)
@@ -82,7 +81,7 @@ def get_stations(params: dict) -> dict:
         where_str = 'WHERE ' + ' AND '.join(where) if where else ''
         order = 'r.listen_count DESC' if sort == 'listen_count' else 'r.name ASC'
 
-        query = f"""
+        cur.execute(f"""
             SELECT r.id, r.name, r.description, r.stream_url, r.cover_url, r.city, r.frequency,
                    r.listen_count, r.is_featured, r.category_id, r.genre_id,
                    c.name as category_name, c.color as category_color, g.name as genre_name,
@@ -93,25 +92,19 @@ def get_stations(params: dict) -> dict:
             {where_str}
             ORDER BY {order}
             LIMIT %s OFFSET %s
-        """
-        args.extend([limit, offset])
-        cur.execute(query, args)
+        """, args + [limit, offset])
         rows = cur.fetchall()
 
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.radio_stations r {where_str}", args[:-2] if args else [])
+        cnt_args = args[:]
+        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.radio_stations r {where_str}", cnt_args)
         total = cur.fetchone()[0]
 
-        stations = []
-        for row in rows:
-            stations.append({
-                'id': row[0], 'name': row[1], 'description': row[2], 'stream_url': row[3],
-                'cover_url': row[4], 'city': row[5], 'frequency': row[6],
-                'listen_count': row[7], 'is_featured': row[8],
-                'category_id': row[9], 'genre_id': row[10],
-                'category_name': row[11], 'category_color': row[12], 'genre_name': row[13],
-                'created_at': str(row[14])
-            })
-
+        stations = [{'id': r[0], 'name': r[1], 'description': r[2], 'stream_url': r[3],
+                     'cover_url': r[4], 'city': r[5], 'frequency': r[6],
+                     'listen_count': r[7], 'is_featured': r[8],
+                     'category_id': r[9], 'genre_id': r[10],
+                     'category_name': r[11], 'category_color': r[12], 'genre_name': r[13],
+                     'created_at': str(r[14])} for r in rows]
         return ok({'stations': stations, 'total': total})
     finally:
         cur.close()
@@ -125,7 +118,8 @@ def get_popular(params: dict) -> dict:
         limit = min(int(params.get('limit', 10)), 20)
         cur.execute(f"""
             SELECT r.id, r.name, r.cover_url, r.city, r.frequency, r.listen_count,
-                   c.name as category_name, c.color as category_color, g.name as genre_name
+                   c.name, c.color, g.name, r.stream_url, r.description, r.is_featured,
+                   r.category_id, r.genre_id
             FROM {SCHEMA}.radio_stations r
             LEFT JOIN {SCHEMA}.categories c ON c.id = r.category_id
             LEFT JOIN {SCHEMA}.genres g ON g.id = r.genre_id
@@ -135,7 +129,9 @@ def get_popular(params: dict) -> dict:
         """, (limit,))
         rows = cur.fetchall()
         stations = [{'id': r[0], 'name': r[1], 'cover_url': r[2], 'city': r[3], 'frequency': r[4],
-                     'listen_count': r[5], 'category_name': r[6], 'category_color': r[7], 'genre_name': r[8]} for r in rows]
+                     'listen_count': r[5], 'category_name': r[6], 'category_color': r[7],
+                     'genre_name': r[8], 'stream_url': r[9], 'description': r[10],
+                     'is_featured': r[11], 'category_id': r[12], 'genre_id': r[13]} for r in rows]
         return ok({'stations': stations})
     finally:
         cur.close()
@@ -158,13 +154,11 @@ def get_station(station_id: str) -> dict:
         row = cur.fetchone()
         if not row:
             return err('Станция не найдена', 404)
-        station = {
-            'id': row[0], 'name': row[1], 'description': row[2], 'stream_url': row[3],
-            'cover_url': row[4], 'website_url': row[5], 'city': row[6], 'frequency': row[7],
-            'listen_count': row[8], 'is_featured': row[9],
-            'category_name': row[10], 'category_color': row[11], 'genre_name': row[12]
-        }
-        return ok({'station': station})
+        return ok({'station': {'id': row[0], 'name': row[1], 'description': row[2],
+                               'stream_url': row[3], 'cover_url': row[4], 'website_url': row[5],
+                               'city': row[6], 'frequency': row[7], 'listen_count': row[8],
+                               'is_featured': row[9], 'category_name': row[10],
+                               'category_color': row[11], 'genre_name': row[12]}})
     finally:
         cur.close()
         conn.close()
@@ -176,8 +170,7 @@ def get_categories() -> dict:
     try:
         cur.execute(f"SELECT id, name, slug, color FROM {SCHEMA}.categories ORDER BY name")
         rows = cur.fetchall()
-        categories = [{'id': r[0], 'name': r[1], 'slug': r[2], 'color': r[3]} for r in rows]
-        return ok({'categories': categories})
+        return ok({'categories': [{'id': r[0], 'name': r[1], 'slug': r[2], 'color': r[3]} for r in rows]})
     finally:
         cur.close()
         conn.close()
@@ -189,8 +182,7 @@ def get_genres() -> dict:
     try:
         cur.execute(f"SELECT id, name, slug FROM {SCHEMA}.genres ORDER BY name")
         rows = cur.fetchall()
-        genres = [{'id': r[0], 'name': r[1], 'slug': r[2]} for r in rows]
-        return ok({'genres': genres})
+        return ok({'genres': [{'id': r[0], 'name': r[1], 'slug': r[2]} for r in rows]})
     finally:
         cur.close()
         conn.close()
@@ -202,30 +194,24 @@ def get_slider() -> dict:
     try:
         cur.execute(f"SELECT id, title, subtitle, image_url, link_url FROM {SCHEMA}.slider_banners WHERE is_active = TRUE ORDER BY sort_order")
         rows = cur.fetchall()
-        banners = [{'id': r[0], 'title': r[1], 'subtitle': r[2], 'image_url': r[3], 'link_url': r[4]} for r in rows]
-        return ok({'banners': banners})
+        return ok({'banners': [{'id': r[0], 'title': r[1], 'subtitle': r[2], 'image_url': r[3], 'link_url': r[4]} for r in rows]})
     finally:
         cur.close()
         conn.close()
 
 
 def increment_listen(event: dict) -> dict:
-    body = json.loads(event.get('body', '{}'))
+    body = json.loads(event.get('body', '{}') or '{}')
     station_id = body.get('station_id')
     user_id = body.get('user_id')
-
     if not station_id:
         return err('station_id required')
-
     conn = get_db()
     cur = conn.cursor()
     try:
         cur.execute(f"UPDATE {SCHEMA}.radio_stations SET listen_count = listen_count + 1 WHERE id = %s", (station_id,))
         if user_id:
-            cur.execute(
-                f"INSERT INTO {SCHEMA}.listen_history (user_id, station_id) VALUES (%s, %s)",
-                (user_id, station_id)
-            )
+            cur.execute(f"INSERT INTO {SCHEMA}.listen_history (user_id, station_id) VALUES (%s, %s)", (user_id, station_id))
         conn.commit()
         return ok({'ok': True})
     finally:
